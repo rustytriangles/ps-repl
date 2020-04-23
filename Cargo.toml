@@ -1,0 +1,13 @@
+[package]
+name = "rustrepl"
+version = "0.1.0"
+authors = ["Mike Garrity"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static = "1.4.0"
+rand = "0.6.5"
+regex = "1"
+rustyline = "6.1.1"
