@@ -298,8 +298,15 @@ mod op {
     // exp
     pub fn exp(stack: &mut Vec<f32>) -> () {
         match stack.pop() {
-            Some(v) => {
-                stack.push(v.exp());
+            Some(v1) => {
+                match stack.pop() {
+                    Some(v2) => {
+                        stack.push(v2.powf(v1));
+                    }
+                    _ => {
+                        println!("Error: stack underflow");
+                    }
+                }
             }
             _ => {
                 println!("Error: stack underflow");
@@ -483,6 +490,48 @@ mod op {
             roll(&mut stack);
             assert_eq!(stack, [2., 1., 4., 3.]);
         }
+
+        #[test]
+        fn test_exp() {
+            {
+                let mut stack = vec![9., 0.5];
+                exp(&mut stack);
+                assert_eq!(stack, [3.]);
+            }
+            {
+                let mut stack = vec![-9., -1.];
+                exp(&mut stack);
+                assert_eq!(stack, [-0.11111111]);
+            }
+	}
+
+        #[test]
+        fn test_ln() {
+            {
+                let mut stack = vec![10.];
+                ln(&mut stack);
+                assert_eq!(stack, [2.3025851]);
+            }
+            {
+                let mut stack = vec![100.];
+                ln(&mut stack);
+                assert_eq!(stack, [4.6051702]);
+            }
+	}
+
+        #[test]
+        fn test_log() {
+            {
+                let mut stack = vec![10.];
+                log(&mut stack);
+                assert_eq!(stack, [1.]);
+            }
+            {
+                let mut stack = vec![100.];
+                log(&mut stack);
+                assert_eq!(stack, [2.]);
+            }
+	}
 
         #[test]
         fn test_cos() {
