@@ -3,9 +3,24 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::collections::HashMap;
 
-
 mod op {
 
+    // @todo value should probably move out of op
+    #[derive(PartialEq, Debug, Copy, Clone)]
+    pub enum Tag { Number, Symbol, String }
+
+    // @todo union would save memory, but require unsafe all over
+    #[derive(PartialEq, Debug, Copy, Clone)]
+    pub struct Value { pub tag: Tag, pub val: f32 }
+
+    #[macro_export]
+    macro_rules! number {
+	($ex:expr) => {
+	    Value { tag: Tag::Number, val: $ex }
+	}
+    }
+
+    // op table macros
     #[macro_export]
     macro_rules! add_op {
 	($table:tt, $func_name:ident) => {
@@ -13,7 +28,7 @@ mod op {
 	};
     }
 
-    macro_rules! take_one {
+    macro_rules! take_one_number {
 	($s:ident, $v:ident, $ex:expr) => {
             match $s.pop() {
 		Some($v) => {
@@ -26,7 +41,7 @@ mod op {
 	}
     }
 
-    macro_rules! take_two {
+    macro_rules! take_two_numbers {
 	($s:ident, $v1:ident, $v2:ident, $ex:expr) => {
             match $s.pop() {
 		Some($v2) => {
@@ -46,27 +61,27 @@ mod op {
 	}
     }
 
-    pub fn dup(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, {
+    pub fn dup(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, {
             stack.push(v);
             stack.push(v);
         });
     }
 
-    pub fn exch(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, {
+    pub fn exch(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, {
             stack.push(v2);
             stack.push(v1);
         });
     }
 
-    pub fn pop(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, _v, {} );
+    pub fn pop(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, _v, {} );
     }
 
-    pub fn copy(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, {
-            let n = v as usize;
+    pub fn copy(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, {
+            let n = v.val as usize;
             if stack.len() >= n {
                 let start = stack.len() - n;
                 let end = stack.len();
@@ -77,10 +92,10 @@ mod op {
 	});
     }
 
-    pub fn roll(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, {
-            let n = v1 as usize;
-            let i = v2 as i32;
+    pub fn roll(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, {
+            let n = v1.val as usize;
+            let i = v2.val as i32;
             if stack.len() >= n {
                 let mut temp = Vec::new();
                 let start = stack.len() - n;
@@ -98,9 +113,9 @@ mod op {
 	});
     }
 
-    pub fn index(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, {
-	    let n = v as usize;
+    pub fn index(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, {
+	    let n = v.val as usize;
             if stack.len() >= n {
                 let i = stack.len() - n - 1;
                 stack.push(stack[i]);
@@ -108,116 +123,116 @@ mod op {
 	});
     }
 
-    pub fn clear(stack: &mut Vec<f32>) -> () {
-        stack.clear();
+    pub fn clear(stack: &mut Vec<Value>) -> () {
+        stack.clear()
     }
 
-    pub fn count(stack: &mut Vec<f32>) -> () {
-        stack.push(stack.len() as f32);
+    pub fn count(stack: &mut Vec<Value>) -> () {
+        stack.push(number!(stack.len() as f32))
     }
 
-    pub fn add(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, stack.push(v1 + v2) );
+    pub fn add(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val + v2.val)))
     }
 
-    pub fn sub(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, stack.push(v1 - v2) );
+    pub fn sub(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val - v2.val)))
     }
 
-    pub fn mul(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, stack.push(v1 * v2) );
+    pub fn mul(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val * v2.val)))
     }
 
-    pub fn div(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, stack.push(v1 / v2));
+    pub fn div(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val / v2.val)))
     }
 
     // idiv
-    pub fn idiv(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, stack.push((v1 as i32 / v2 as i32) as f32) );
+    pub fn idiv(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, stack.push(number!((v1.val as i32 / v2.val as i32) as f32)))
     }
 
     // mod
-    pub fn mod_fn(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, stack.push((v1 as i32 % v2 as i32) as f32) );
+    pub fn mod_fn(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, stack.push(number!((v1.val as i32 % v2.val as i32) as f32)))
     }
 
 
     // abs
-    pub fn abs(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.abs()) );
+    pub fn abs(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.abs())))
     }
 
     // neg
-    pub fn neg(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(-v) );
+    pub fn neg(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(-v.val)))
     }
 
     // ceiling
-    pub fn ceiling(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.ceil()) );
+    pub fn ceiling(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.ceil())))
     }
 
     // floor
-    pub fn floor(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.floor()) );
+    pub fn floor(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.floor())))
     }
 
     // round
-    pub fn round(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.round()) );
+    pub fn round(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.round())))
     }
 
     // truncate
-    pub fn truncate(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.trunc()) );
+    pub fn truncate(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.trunc())))
     }
 
     // sqrt
-    pub fn sqrt(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.sqrt()) );
+    pub fn sqrt(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.sqrt())))
     }
 
     // exp
-    pub fn exp(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, stack.push(v1.powf(v2)) );
+    pub fn exp(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val.powf(v2.val))))
     }
 
     // ln
-    pub fn ln(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.ln()) );
+    pub fn ln(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.ln())))
     }
 
     // log
-    pub fn log(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.log10()) );
+    pub fn log(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.log10())))
     }
 
     // sin
-    pub fn sin(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.to_radians().sin()) );
+    pub fn sin(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.to_radians().sin())))
     }
 
     // cos
-    pub fn cos(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, stack.push(v.to_radians().cos()) );
+    pub fn cos(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, stack.push(number!(v.val.to_radians().cos())))
     }
 
     // atan
-    pub fn atan(stack: &mut Vec<f32>) -> () {
-	take_two!(stack, v1, v2, {
-            let r = v1.atan2(v2).to_degrees();
+    pub fn atan(stack: &mut Vec<Value>) -> () {
+	take_two_numbers!(stack, v1, v2, {
+            let r = v1.val.atan2(v2.val).to_degrees();
             if r >= 0. {
-                stack.push(r);
+                stack.push(number!(r))
             } else {
-                stack.push(r + 360.);
+                stack.push(number!(r + 360.))
             }
 	});
     }
 
     // rand
-    pub fn rand(stack: &mut Vec<f32>) -> () {
-        stack.push(rand::random::<u32>() as f32);
+    pub fn rand(stack: &mut Vec<Value>) -> () {
+        stack.push(number!(rand::random::<u32>() as f32))
     }
 
     // srand
@@ -231,14 +246,14 @@ mod op {
     // forall
     // exit
 
-    pub fn eq(stack: &mut Vec<f32>) -> () {
-	take_one!(stack, v, println!(" {}", v) );
+    pub fn eq(stack: &mut Vec<Value>) -> () {
+	take_one_number!(stack, v, println!(" {}", v.val) );
     }
 
     // eeq
-    pub fn stack_fn(stack: &mut Vec<f32>) -> () {
+    pub fn stack_fn(stack: &mut Vec<Value>) -> () {
         for i in stack.iter().rev() {
-            println!(" {}", i);
+            println!(" {}", i.val);
         }
     }
 
@@ -250,290 +265,297 @@ mod op {
 
         #[test]
         fn test_dup() {
-            let mut stack = vec![1., 2.];
+            let mut stack = vec![number!(1.), number!(2.)];
             dup(&mut stack);
-            assert_eq!(stack, [1., 2., 2.]);
+            assert_eq!(stack, [number!(1.), number!(2.), number!(2.)]);
         }
 
         #[test]
         fn test_exch() {
-            let mut stack = vec![1., 2.];
+            let mut stack = vec![number!(1.), number!(2.)];
             exch(&mut stack);
-            assert_eq!(stack, [2., 1.]);
+            assert_eq!(stack, [number!(2.), number!(1.)]);
         }
 
         #[test]
         fn test_pop() {
-	    let mut stack = vec![1., 2., 3.];
+	    let mut stack = vec![number!(1.), number!(2.), number!(3.)];
 	    pop(&mut stack);
-	    assert_eq!(stack, [1., 2.]);
+	    assert_eq!(stack, [number!(1.), number!(2.)]);
 	}
 
         #[test]
         fn test_copy() {
 	    {
-		let mut stack = vec![1., 2., 3., 2.];
+		let mut stack = vec![number!(1.), number!(2.),
+				     number!(3.), number!(2.)];
 		copy(&mut stack);
-		assert_eq!(stack, [1., 2., 3., 2., 3.]);
+		assert_eq!(stack, [number!(1.), number!(2.), number!(3.),
+				   number!(2.), number!(3.)]);
 	    }
 	    {
-		let mut stack = vec![1., 2., 3., 0.];
+		let mut stack = vec![number!(1.), number!(2.), number!(3.),
+				     number!(0.)];
 		copy(&mut stack);
-		assert_eq!(stack, [1., 2., 3.]);
+		assert_eq!(stack, [number!(1.), number!(2.), number!(3.),]);
 	    }
 	}
 
         #[test]
         fn test_roll() {
-            let mut stack = vec![4., 3., 2., 1., 3., 1.];
+            let mut stack = vec![number!(4.), number!(3.), number!(2.), number!(1.),
+				 number!(3.), number!(1.)];
             roll(&mut stack);
-            assert_eq!(stack, [4., 1., 3., 2.]);
-            stack.push(3.);
-            stack.push(-1.);
+            assert_eq!(stack, [number!(4.), number!(1.), number!(3.), number!(2.)]);
+            stack.push(number!(3.));
+            stack.push(number!(-1.));
             roll(&mut stack);
-            assert_eq!(stack, [4., 3., 2., 1.]);
-            stack.push(4.);
-            stack.push(2.);
+            assert_eq!(stack, [number!(4.), number!(3.), number!(2.), number!(1.)]);
+            stack.push(number!(4.));
+            stack.push(number!(2.));
             roll(&mut stack);
-            assert_eq!(stack, [2., 1., 4., 3.]);
+            assert_eq!(stack, [number!(2.), number!(1.), number!(4.), number!(3.)]);
         }
 
         #[test]
         fn test_index() {
             {
-                let mut stack = vec![1., 2., 3., 4., 0.,];
+                let mut stack = vec![number!(1.), number!(2.), number!(3.), number!(4.),
+				     number!(0.)];
                 index(&mut stack);
-                assert_eq!(stack, [1., 2., 3., 4., 4.]);
+                assert_eq!(stack, [number!(1.), number!(2.), number!(3.), number!(4.),
+				   number!(4.)]);
             }
             {
-                let mut stack = vec![1., 2., 3., 4., 3.,];
+                let mut stack = vec![number!(1.), number!(2.), number!(3.), number!(4.),
+				     number!(3.)];
                 index(&mut stack);
-                assert_eq!(stack, [1., 2., 3., 4., 1.]);
+                assert_eq!(stack, [number!(1.), number!(2.), number!(3.), number!(4.), number!(1.)]);
             }
 	}
 
         #[test]
         fn test_clear() {
-            let mut stack = vec![1., 2., 3., 4.];
+            let mut stack = vec![number!(1.), number!(2.), number!(3.), number!(4.)];
             clear(&mut stack);
             assert_eq!(stack, []);
 	}
 
         #[test]
         fn test_count() {
-            let mut stack = vec![1., 2.];
+            let mut stack = vec![number!(1.), number!(2.)];
             count(&mut stack);
-            assert_eq!(stack, [1., 2., 2.]);
+            assert_eq!(stack, [number!(1.), number!(2.), number!(2.)]);
             stack.clear();
             count(&mut stack);
-            assert_eq!(stack, [0.]);
+            assert_eq!(stack, [number!(0.)]);
         }
 
         #[test]
         fn test_add() {
-            let mut stack = vec![1., 2.];
+            let mut stack = vec![number!(1.), number!(2.)];
             add(&mut stack);
-            assert_eq!(stack, [3.]);
+            assert_eq!(stack, [number!(3.)]);
         }
 
         #[test]
         fn test_sub() {
-            let mut stack = vec![1., 2.];
+            let mut stack = vec![number!(1.), number!(2.)];
             sub(&mut stack);
-            assert_eq!(stack, [-1.]);
+            assert_eq!(stack, [number!(-1.)]);
         }
 
         #[test]
         fn test_mul() {
-            let mut stack = vec![3., 4.];
+            let mut stack = vec![number!(3.), number!(4.)];
             mul(&mut stack);
-            assert_eq!(stack, [12.]);
+            assert_eq!(stack, [number!(12.)]);
         }
 
         #[test]
         fn test_div() {
             {
-                let mut stack = vec![3., 2.];
+                let mut stack = vec![number!(3.), number!(2.)];
                 div(&mut stack);
-                assert_eq!(stack, [1.5]);
+                assert_eq!(stack, [number!(1.5)]);
             }
             {
-                let mut stack = vec![4., 2.];
+                let mut stack = vec![number!(4.), number!(2.)];
                 div(&mut stack);
-                assert_eq!(stack, [2.]);
+                assert_eq!(stack, [number!(2.)]);
             }
         }
 
         #[test]
         fn test_idiv() {
             {
-                let mut stack = vec![3., 2.];
+                let mut stack = vec![number!(3.), number!(2.)];
                 idiv(&mut stack);
-                assert_eq!(stack, [1.]);
+                assert_eq!(stack, [number!(1.)]);
             }
             {
-                let mut stack = vec![4., 2.];
+                let mut stack = vec![number!(4.), number!(2.)];
                 idiv(&mut stack);
-                assert_eq!(stack, [2.]);
+                assert_eq!(stack, [number!(2.)]);
             }
             {
-                let mut stack = vec![-5., 2.];
+                let mut stack = vec![number!(-5.), number!(2.)];
                 idiv(&mut stack);
-                assert_eq!(stack, [-2.]);
+                assert_eq!(stack, [number!(-2.)]);
             }
         }
 
         #[test]
         fn test_mod() {
             {
-                let mut stack = vec![5., 3.];
+                let mut stack = vec![number!(5.), number!(3.)];
                 mod_fn(&mut stack);
-                assert_eq!(stack, [2.]);
+                assert_eq!(stack, [number!(2.)]);
             }
             {
-                let mut stack = vec![5., 2.];
+                let mut stack = vec![number!(5.), number!(2.)];
                 mod_fn(&mut stack);
-                assert_eq!(stack, [1.]);
+                assert_eq!(stack, [number!(1.)]);
             }
             {
-                let mut stack = vec![-5., 3.];
+                let mut stack = vec![number!(-5.), number!(3.)];
                 mod_fn(&mut stack);
-                assert_eq!(stack, [-2.]);
+                assert_eq!(stack, [number!(-2.)]);
             }
 	}
 
         #[test]
         fn test_abs() {
             {
-                let mut stack = vec![-2.];
+                let mut stack = vec![number!(-2.)];
                 abs(&mut stack);
-                assert_eq!(stack, [2.]);
+                assert_eq!(stack, [number!(2.)]);
             }
             {
-                let mut stack = vec![3.];
+                let mut stack = vec![number!(3.)];
                 abs(&mut stack);
-                assert_eq!(stack, [3.]);
+                assert_eq!(stack, [number!(3.)]);
             }
 	}
 
         #[test]
         fn test_neg() {
             {
-                let mut stack = vec![-2.];
+                let mut stack = vec![number!(-2.)];
                 neg(&mut stack);
-                assert_eq!(stack, [2.]);
+                assert_eq!(stack, [number!(2.)]);
             }
             {
-                let mut stack = vec![3.];
+                let mut stack = vec![number!(3.)];
                 neg(&mut stack);
-                assert_eq!(stack, [-3.]);
+                assert_eq!(stack, [number!(-3.)]);
             }
 	}
 
         #[test]
         fn test_ceiling() {
             {
-                let mut stack = vec![3.2];
+                let mut stack = vec![number!(3.2)];
                 ceiling(&mut stack);
-                assert_eq!(stack, [4.]);
+                assert_eq!(stack, [number!(4.)]);
             }
             {
-                let mut stack = vec![-4.8];
+                let mut stack = vec![number!(-4.8)];
                 ceiling(&mut stack);
-                assert_eq!(stack, [-4.]);
+                assert_eq!(stack, [number!(-4.)]);
             }
             {
-                let mut stack = vec![99.];
+                let mut stack = vec![number!(99.)];
                 ceiling(&mut stack);
-                assert_eq!(stack, [99.]);
+                assert_eq!(stack, [number!(99.)]);
             }
 	}
 
         #[test]
         fn test_floor() {
             {
-                let mut stack = vec![3.2];
+                let mut stack = vec![number!(3.2)];
                 floor(&mut stack);
-                assert_eq!(stack, [3.]);
+                assert_eq!(stack, [number!(3.)]);
             }
             {
-                let mut stack = vec![-4.8];
+                let mut stack = vec![number!(-4.8)];
                 floor(&mut stack);
-                assert_eq!(stack, [-5.]);
+                assert_eq!(stack, [number!(-5.)]);
             }
             {
-                let mut stack = vec![99.];
+                let mut stack = vec![number!(99.)];
                 floor(&mut stack);
-                assert_eq!(stack, [99.]);
+                assert_eq!(stack, [number!(99.)]);
             }
 	}
 
         #[test]
         fn test_round() {
             {
-                let mut stack = vec![3.2];
+                let mut stack = vec![number!(3.2)];
                 round(&mut stack);
-                assert_eq!(stack, [3.]);
+                assert_eq!(stack, [number!(3.)]);
             }
 //            {
-//                let mut stack = vec![6.5];
+//                let mut stack = vec![number!(6.5)];
 //                round(&mut stack);
-//                assert_eq!(stack, [7.]);
+//                assert_eq!(stack, [number!(7.)]);
 //            }
             {
-                let mut stack = vec![-4.8];
+                let mut stack = vec![number!(-4.8)];
                 round(&mut stack);
-                assert_eq!(stack, [-5.]);
+                assert_eq!(stack, [number!(-5.)]);
             }
 //            {
-//                let mut stack = vec![-6.5];
+//                let mut stack = vec![number!(-6.5)];
 //                round(&mut stack);
-//                assert_eq!(stack, [-6.]);
+//                assert_eq!(stack, [number!(-6.)]);
 //            }
             {
-                let mut stack = vec![99.];
+                let mut stack = vec![number!(99.)];
                 round(&mut stack);
-                assert_eq!(stack, [99.]);
+                assert_eq!(stack, [number!(99.)]);
             }
 	}
 
         #[test]
         fn test_truncate() {
             {
-                let mut stack = vec![3.2];
+                let mut stack = vec![number!(3.2)];
                 truncate(&mut stack);
-                assert_eq!(stack, [3.]);
+                assert_eq!(stack, [number!(3.)]);
             }
             {
-                let mut stack = vec![-4.8];
+                let mut stack = vec![number!(-4.8)];
                 truncate(&mut stack);
-                assert_eq!(stack, [-4.]);
+                assert_eq!(stack, [number!(-4.)]);
             }
             {
-                let mut stack = vec![99.];
+                let mut stack = vec![number!(99.)];
                 truncate(&mut stack);
-                assert_eq!(stack, [99.]);
+                assert_eq!(stack, [number!(99.)]);
             }
 	}
 
         #[test]
         fn test_sqrt() {
-            let mut stack = vec![9.];
+            let mut stack = vec![number!(9.)];
             sqrt(&mut stack);
-            assert_eq!(stack, [3.]);
+            assert_eq!(stack, [number!(3.)]);
         }
 
         #[test]
         fn test_exp() {
             {
-                let mut stack = vec![9., 0.5];
+                let mut stack = vec![number!(9.), number!(0.5)];
                 exp(&mut stack);
-                assert_eq!(stack, [3.]);
+                assert_eq!(stack, [number!(3.)]);
             }
             {
-                let mut stack = vec![-9., -1.];
+                let mut stack = vec![number!(-9.), number!(-1.)];
                 exp(&mut stack);
-                assert_eq!(stack, [-0.11111111]);
+                assert_eq!(stack, [number!(-0.11111111)]);
             }
 	}
 
@@ -541,28 +563,28 @@ mod op {
         #[test]
         fn test_ln() {
             {
-                let mut stack = vec![10.];
+                let mut stack = vec![number!(10.)];
                 ln(&mut stack);
-                assert_eq!(stack, [2.3025851]);
+                assert_eq!(stack, [number!(2.3025851)]);
             }
             {
-                let mut stack = vec![100.];
+                let mut stack = vec![number!(100.)];
                 ln(&mut stack);
-                assert_eq!(stack, [4.6051702]);
+                assert_eq!(stack, [number!(4.6051702)]);
             }
 	}
 
         #[test]
         fn test_log() {
             {
-                let mut stack = vec![10.];
+                let mut stack = vec![number!(10.)];
                 log(&mut stack);
-                assert_eq!(stack, [1.]);
+                assert_eq!(stack, [number!(1.)]);
             }
             {
-                let mut stack = vec![100.];
+                let mut stack = vec![number!(100.)];
                 log(&mut stack);
-                assert_eq!(stack, [2.]);
+                assert_eq!(stack, [number!(2.)]);
             }
 	}
 
@@ -571,39 +593,39 @@ mod op {
         #[test]
         fn test_cos() {
             {
-                let mut stack = vec![0.];
+                let mut stack = vec![number!(0.)];
                 cos(&mut stack);
-                assert_eq!(stack, [1.]);
+                assert_eq!(stack, [number!(1.)]);
             }
 // @todo need something like the approx crate
 //          {
-//              let mut stack = vec![90.];
+//              let mut stack = vec![number!(90.)];
 //              cos(&mut stack);
-//              assert_eq!(stack, [0.]);
+//              assert_eq!(stack, [number!(0.)]);
 //          }
         }
 
         #[test]
         fn test_atan() {
             {
-                let mut stack = vec![0., 1.];
+                let mut stack = vec![number!(0.), number!(1.)];
                 atan(&mut stack);
-                assert_eq!(stack, [0.]);
+                assert_eq!(stack, [number!(0.)]);
             }
             {
-                let mut stack = vec![1., 0.];
+                let mut stack = vec![number!(1.), number!(0.)];
                 atan(&mut stack);
-                assert_eq!(stack, [90.]);
+                assert_eq!(stack, [number!(90.)]);
             }
             {
-                let mut stack = vec![-100., 0.];
+                let mut stack = vec![number!(-100.), number!(0.)];
                 atan(&mut stack);
-                assert_eq!(stack, [270.]);
+                assert_eq!(stack, [number!(270.)]);
             }
             {
-                let mut stack = vec![4., 4.];
+                let mut stack = vec![number!(4.), number!(4.)];
                 atan(&mut stack);
-                assert_eq!(stack, [45.]);
+                assert_eq!(stack, [number!(45.)]);
             }
         }
 
@@ -625,7 +647,7 @@ mod op {
 fn main() {
     let mut rl = Editor::<()>::new();
     let mut stack = Vec::new();
-    let mut function_table: HashMap<String, fn(&mut Vec<f32>)> = HashMap::new();
+    let mut function_table: HashMap<String, fn(&mut Vec<Value>)> = HashMap::new();
 
     use crate::op::*;
     // 3.6.1
@@ -686,7 +708,7 @@ fn main() {
                 for w in words {
                     match w.parse::<f32>() {
                         Ok(val) => {
-                            stack.push(val);
+                            stack.push(number!(val));
                         }
                         _ => {
                             match function_table.get(w) {
@@ -694,6 +716,9 @@ fn main() {
                                     fcn(&mut stack)
                                 }
                                 _ => {
+
+				    // @todo todo check for symbol & string here
+
                                     println!("word: {}", w);
                                 }
                             }
