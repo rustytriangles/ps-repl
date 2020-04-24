@@ -9,14 +9,58 @@ mod op {
     #[derive(PartialEq, Debug, Copy, Clone)]
     pub enum Tag { Number, Symbol, String }
 
-    // @todo union would save memory, but require unsafe all over
-    #[derive(PartialEq, Debug, Copy, Clone)]
-    pub struct Value { pub tag: Tag, pub val: f32 }
+    pub union U {
+	pub f: f32,
+	pub s: &'static str
+    }
+
+    pub struct Value { pub tag: Tag, pub val: U }
+
+    impl Clone for Value {
+	fn clone(&self) -> Self {
+	    if self.tag == Tag::Number {
+		unsafe {
+		    Value { tag: self.tag, val: U { f: self.val.f }}
+		}
+	    } else {
+		unsafe {
+		    Value { tag: self.tag, val: U { s: self.val.s }}
+		}
+	    }
+	}
+    }
+
+    impl PartialEq for Value {
+	fn eq(&self, other: &Self) -> bool {
+	    if self.tag == Tag::Number && other.tag == Tag::Number {
+		unsafe {
+		    self.val.f == other.val.f
+		}
+	    } else if self.tag == Tag::String && other.tag == Tag::String {
+		unsafe {
+		    self.val.s == other.val.s
+		}
+	    } else {
+		false
+	    }
+	}
+    }
+
+    impl std::fmt::Debug for Value {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	    unsafe {
+		f.debug_struct("Value")
+		    .field("tag", &self.tag)
+		    .field("val", &self.val.f)
+		    .finish()
+	    }
+	}
+    }
 
     #[macro_export]
     macro_rules! number {
 	($ex:expr) => {
-	    Value { tag: Tag::Number, val: $ex }
+	    Value { tag: Tag::Number, val: U { f: $ex } }
 	}
     }
 
@@ -30,48 +74,78 @@ mod op {
 
     macro_rules! take_one_number {
 	($s:ident, $v:ident, $ex:expr) => {
-            match $s.pop() {
-		Some($v) => {
-		    $ex;
+	    unsafe {
+		match $s.pop() {
+		    Some(Value { tag: Tag::Number, val: U { f: $v } }) => {
+			$ex;
+		    }
+		    // @todo add different message for symbol & string
+		    _ => {
+			println!("Error: stack underflow");
+		    }
+		}
+	    }
+	}
+    }
+
+    macro_rules! take_two {
+	($s:ident, $v1:ident, $v2:ident, $ex:expr) => {
+	    match $s.pop() {
+		Some($v2) => {
+		    match $s.pop() {
+			Some($v1) => {
+			    $ex;
+			}
+			_ => {
+			    println!("Error: stack underflow");
+			}
+		    }
 		}
 		_ => {
-                    println!("Error: stack underflow");
+		    println!("Error: stack underflow");
 		}
-            }
+	    }
 	}
     }
 
     macro_rules! take_two_numbers {
 	($s:ident, $v1:ident, $v2:ident, $ex:expr) => {
-            match $s.pop() {
-		Some($v2) => {
-                    match $s.pop() {
-			Some($v1) => {
-			    $ex;
+	    unsafe {
+		match $s.pop() {
+		    Some(Value { tag: Tag::Number, val: U { f: $v2 } }) => {
+			match $s.pop() {
+			    Some(Value { tag: Tag::Number, val: U { f: $v1 } }) => {
+				$ex;
+			    }
+			    _ => {
+				println!("Error: stack underflow");
+			    }
 			}
-			_ => {
-                            println!("Error: stack underflow");
-			}
-                    }
+		    }
+		    _ => {
+			println!("Error: stack underflow");
+		    }
 		}
-		_ => {
-                    println!("Error: stack underflow");
-		}
-            }
+	    }
 	}
     }
 
     pub fn dup(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, {
-            stack.push(v);
-            stack.push(v);
-        });
+        match stack.pop() {
+	    Some(v) => {
+		stack.push(v.clone());
+		stack.push(v.clone());
+	    }
+	    _ => {
+                println!("Error: stack underflow");
+	    }
+	}
     }
 
     pub fn exch(stack: &mut Vec<Value>) -> () {
-	take_two_numbers!(stack, v1, v2, {
-            stack.push(v2);
-            stack.push(v1);
+	take_two!(stack, v1, v2, {
+            stack.push(v2.clone());
+            stack.push(v1.clone());
         });
     }
 
@@ -81,12 +155,12 @@ mod op {
 
     pub fn copy(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, {
-            let n = v.val as usize;
+            let n = v as usize;
             if stack.len() >= n {
                 let start = stack.len() - n;
                 let end = stack.len();
                 for i in start..end {
-                    stack.push(stack[i]);
+                    stack.push(stack[i].clone());
                 }
             }
 	});
@@ -94,8 +168,8 @@ mod op {
 
     pub fn roll(stack: &mut Vec<Value>) -> () {
 	take_two_numbers!(stack, v1, v2, {
-            let n = v1.val as usize;
-            let i = v2.val as i32;
+            let n = v1 as usize;
+            let i = v2 as i32;
             if stack.len() >= n {
                 let mut temp = Vec::new();
                 let start = stack.len() - n;
@@ -105,7 +179,7 @@ mod op {
                 }
                 for j in (0..n).rev() {
                     let k = (n as i32 + j as i32 + i) as usize;
-                    stack.push(temp[k%n]);
+                    stack.push(temp[k%n].clone());
                 }
             } else {
                 println!("Error: stack underflow");
@@ -115,10 +189,10 @@ mod op {
 
     pub fn index(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, {
-	    let n = v.val as usize;
+	    let n = v as usize;
             if stack.len() >= n {
                 let i = stack.len() - n - 1;
-                stack.push(stack[i]);
+                stack.push(stack[i].clone());
             }
 	});
     }
@@ -132,96 +206,96 @@ mod op {
     }
 
     pub fn add(stack: &mut Vec<Value>) -> () {
-	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val + v2.val)))
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1 + v2)))
     }
 
     pub fn sub(stack: &mut Vec<Value>) -> () {
-	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val - v2.val)))
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1 - v2)))
     }
 
     pub fn mul(stack: &mut Vec<Value>) -> () {
-	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val * v2.val)))
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1 * v2)))
     }
 
     pub fn div(stack: &mut Vec<Value>) -> () {
-	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val / v2.val)))
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1 / v2)))
     }
 
     // idiv
     pub fn idiv(stack: &mut Vec<Value>) -> () {
-	take_two_numbers!(stack, v1, v2, stack.push(number!((v1.val as i32 / v2.val as i32) as f32)))
+	take_two_numbers!(stack, v1, v2, stack.push(number!((v1 as i32 / v2 as i32) as f32)))
     }
 
     // mod
     pub fn mod_fn(stack: &mut Vec<Value>) -> () {
-	take_two_numbers!(stack, v1, v2, stack.push(number!((v1.val as i32 % v2.val as i32) as f32)))
+	take_two_numbers!(stack, v1, v2, stack.push(number!((v1 as i32 % v2 as i32) as f32)))
     }
 
 
     // abs
     pub fn abs(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.abs())))
+	take_one_number!(stack, v, stack.push(number!(v.abs())))
     }
 
     // neg
     pub fn neg(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(-v.val)))
+	take_one_number!(stack, v, stack.push(number!(-v)))
     }
 
     // ceiling
     pub fn ceiling(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.ceil())))
+	take_one_number!(stack, v, stack.push(number!(v.ceil())))
     }
 
     // floor
     pub fn floor(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.floor())))
+	take_one_number!(stack, v, stack.push(number!(v.floor())))
     }
 
     // round
     pub fn round(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.round())))
+	take_one_number!(stack, v, stack.push(number!(v.round())))
     }
 
     // truncate
     pub fn truncate(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.trunc())))
+	take_one_number!(stack, v, stack.push(number!(v.trunc())))
     }
 
     // sqrt
     pub fn sqrt(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.sqrt())))
+	take_one_number!(stack, v, stack.push(number!(v.sqrt())))
     }
 
     // exp
     pub fn exp(stack: &mut Vec<Value>) -> () {
-	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.val.powf(v2.val))))
+	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.powf(v2))))
     }
 
     // ln
     pub fn ln(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.ln())))
+	take_one_number!(stack, v, stack.push(number!(v.ln())))
     }
 
     // log
     pub fn log(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.log10())))
+	take_one_number!(stack, v, stack.push(number!(v.log10())))
     }
 
     // sin
     pub fn sin(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.to_radians().sin())))
+	take_one_number!(stack, v, stack.push(number!(v.to_radians().sin())))
     }
 
     // cos
     pub fn cos(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, stack.push(number!(v.val.to_radians().cos())))
+	take_one_number!(stack, v, stack.push(number!(v.to_radians().cos())))
     }
 
     // atan
     pub fn atan(stack: &mut Vec<Value>) -> () {
 	take_two_numbers!(stack, v1, v2, {
-            let r = v1.val.atan2(v2.val).to_degrees();
+            let r = v1.atan2(v2).to_degrees();
             if r >= 0. {
                 stack.push(number!(r))
             } else {
@@ -247,14 +321,38 @@ mod op {
     // exit
 
     pub fn eq(stack: &mut Vec<Value>) -> () {
-	take_one_number!(stack, v, println!(" {}", v.val) );
+	unsafe {
+            match stack.pop() {
+		Some(Value { tag: Tag::Number, val: U { f: v } }) => {
+		    println!(" {}", v)
+		}
+		Some(Value { tag: Tag::String, val: U { s: v } }) => {
+		    println!(" {}", v)
+		}
+		_ => {
+		    println!("Error: stack underflow");
+		}
+	    }
+	}
     }
 
     // eeq
     pub fn stack_fn(stack: &mut Vec<Value>) -> () {
         for i in stack.iter().rev() {
-            println!(" {}", i.val);
-        }
+	    unsafe {
+		match i {
+		    Value { tag: Tag::Number, val: U { f: v } } => {
+			println!(" {}", v)
+		    }
+		    Value { tag: Tag::String, val: U { s: v } } => {
+			println!(" {}", v)
+		    }
+		    _ => {
+			println!("Error: stack underflow");
+		    }
+		}
+	    }
+	}
     }
 
     // pstack
@@ -644,10 +742,16 @@ mod op {
     }
 }
 
+
 fn main() {
     let mut rl = Editor::<()>::new();
     let mut stack = Vec::new();
     let mut function_table: HashMap<String, fn(&mut Vec<Value>)> = HashMap::new();
+
+//    let a = NumOrStr::Num(123);
+//    let b = NumOrStr::Str("fudge".to_string());
+//    print_it(&a);
+//    print_it(&b);
 
     use crate::op::*;
     // 3.6.1
@@ -716,10 +820,17 @@ fn main() {
                                     fcn(&mut stack)
                                 }
                                 _ => {
-
-				    // @todo todo check for symbol & string here
-
-                                    println!("word: {}", w);
+				    // @todo this doesn't handle strings with embedded spaces
+				    if w.chars().next().unwrap() == '('
+					&& w.chars().last().unwrap() == ')' {
+					    let newstr = w.clone();
+//					    stack.push(op::Value { tag: op::Tag::String,
+//								   val: U { s: newstr }
+//					    });
+					println!("string: {}", w);
+				    } else {
+					println!("unknown: {}", w);
+				    }
                                 }
                             }
                         }
