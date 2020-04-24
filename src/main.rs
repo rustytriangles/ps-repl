@@ -3,68 +3,84 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::collections::HashMap;
 
+
 mod op {
+
+    #[macro_export]
+    macro_rules! add_op {
+	($table:tt, $func_name:ident) => {
+	    $table.insert(stringify!($func_name).to_string(), $func_name);
+	};
+    }
+
+    macro_rules! take_one {
+	($s:ident, $v:ident, $ex:expr) => {
+            match $s.pop() {
+		Some($v) => {
+		    $ex;
+		}
+		_ => {
+                    println!("Error: stack underflow");
+		}
+            }
+	}
+    }
+
+    macro_rules! take_two {
+	($s:ident, $v1:ident, $v2:ident, $ex:expr) => {
+            match $s.pop() {
+		Some($v2) => {
+                    match $s.pop() {
+			Some($v1) => {
+			    $ex;
+			}
+			_ => {
+                            println!("Error: stack underflow");
+			}
+                    }
+		}
+		_ => {
+                    println!("Error: stack underflow");
+		}
+            }
+	}
+    }
+
     pub fn dup(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v);
-                stack.push(v);
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, {
+            stack.push(v);
+            stack.push(v);
+        });
     }
 
     pub fn exch(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v1) => {
-                match stack.pop() {
-                    Some(v2) => {
-                        stack.push(v2);
-                        stack.push(v1);
-                    }
-                    _ => {
-                        println!("Error: stack underflow");
-                    }
-                }
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_two!(stack, v1, v2, {
+            stack.push(v2);
+            stack.push(v1);
+        });
     }
 
     pub fn pop(stack: &mut Vec<f32>) -> () {
-        if stack.len() >= 1 {
-            stack.pop();
-        } else {
-            println!("Error: stack underflow");
-        }
+	take_one!(stack, _v, {} );
     }
 
     pub fn copy(stack: &mut Vec<f32>) -> () {
-        if stack.len() >= 1 {
-            let n = stack.pop().unwrap() as usize;
+	take_one!(stack, v, {
+            let n = v as usize;
             if stack.len() >= n {
                 let start = stack.len() - n;
                 let end = stack.len();
                 for i in start..end {
                     stack.push(stack[i]);
                 }
-            } else {
-                println!("Error: stack underflow");
             }
-
-        } else {
-            println!("Error: stack underflow");
-        }
+	});
     }
 
     pub fn roll(stack: &mut Vec<f32>) -> () {
-        if stack.len() >= 2 {
-            let i = stack.pop().unwrap() as i32;
-            let n = stack.pop().unwrap() as usize;
+	take_two!(stack, v1, v2, {
+            let n = v1 as usize;
+            let i = v2 as i32;
             if stack.len() >= n {
                 let mut temp = Vec::new();
                 let start = stack.len() - n;
@@ -79,25 +95,17 @@ mod op {
             } else {
                 println!("Error: stack underflow");
             }
-
-        } else {
-            println!("Error: stack underflow");
-        }
+	});
     }
 
     pub fn index(stack: &mut Vec<f32>) -> () {
-        if stack.len() >= 1 {
-            let n = stack.pop().unwrap() as usize;
+	take_one!(stack, v, {
+	    let n = v as usize;
             if stack.len() >= n {
-                let i = stack.len() - n;
+                let i = stack.len() - n - 1;
                 stack.push(stack[i]);
-            } else {
-                println!("Error: stack underflow");
             }
-
-        } else {
-            println!("Error: stack underflow");
-        }
+	});
     }
 
     pub fn clear(stack: &mut Vec<f32>) -> () {
@@ -109,274 +117,102 @@ mod op {
     }
 
     pub fn add(stack: &mut Vec<f32>) -> () {
-        if stack.len() >= 2 {
-            let v2 = stack.pop().unwrap();
-            let v1 = stack.pop().unwrap();
-            stack.push(v1 + v2);
-
-        } else {
-            println!("Error: stack underflow");
-        }
+	take_two!(stack, v1, v2, stack.push(v1 + v2) );
     }
 
     pub fn sub(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v2) => {
-                match stack.pop() {
-                    Some(v1) => {
-                        stack.push(v1 - v2);
-                    }
-                    _ => {
-                        println!("Error: stack underflow");
-                    }
-                }
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_two!(stack, v1, v2, stack.push(v1 - v2) );
     }
 
     pub fn mul(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v1) => {
-                match stack.pop() {
-                    Some(v2) => {
-                        stack.push(v1 * v2);
-                    }
-                    _ => {
-                        println!("Error: stack underflow");
-                    }
-                }
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_two!(stack, v1, v2, stack.push(v1 * v2) );
     }
 
     pub fn div(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v2) => {
-                match stack.pop() {
-                    Some(v1) => {
-                        stack.push(v1 / v2);
-                    }
-                    _ => {
-                        println!("Error: stack underflow");
-                    }
-                }
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_two!(stack, v1, v2, stack.push(v1 / v2));
     }
 
     // idiv
     pub fn idiv(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v2) => {
-                match stack.pop() {
-                    Some(v1) => {
-                        stack.push((v1 as i32 / v2 as i32) as f32);
-                    }
-                    _ => {
-                        println!("Error: stack underflow");
-                    }
-                }
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_two!(stack, v1, v2, stack.push((v1 as i32 / v2 as i32) as f32) );
     }
 
     // mod
     pub fn mod_fn(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v2) => {
-                match stack.pop() {
-                    Some(v1) => {
-                        stack.push((v1 as i32 % v2 as i32) as f32);
-                    }
-                    _ => {
-                        println!("Error: stack underflow");
-                    }
-                }
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_two!(stack, v1, v2, stack.push((v1 as i32 % v2 as i32) as f32) );
     }
+
 
     // abs
     pub fn abs(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.abs());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.abs()) );
     }
 
     // neg
     pub fn neg(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(-v);
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(-v) );
     }
 
     // ceiling
     pub fn ceiling(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.ceil());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.ceil()) );
     }
 
     // floor
     pub fn floor(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.floor());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.floor()) );
     }
 
     // round
     pub fn round(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.round());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.round()) );
     }
 
     // truncate
     pub fn truncate(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.trunc());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.trunc()) );
     }
 
     // sqrt
     pub fn sqrt(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.sqrt());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.sqrt()) );
     }
 
     // exp
     pub fn exp(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v1) => {
-                match stack.pop() {
-                    Some(v2) => {
-                        stack.push(v2.powf(v1));
-                    }
-                    _ => {
-                        println!("Error: stack underflow");
-                    }
-                }
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_two!(stack, v1, v2, stack.push(v1.powf(v2)) );
     }
 
     // ln
     pub fn ln(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.ln());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.ln()) );
     }
 
     // log
     pub fn log(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.log10());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.log10()) );
     }
 
     // sin
     pub fn sin(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.to_radians().sin());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.to_radians().sin()) );
     }
 
     // cos
     pub fn cos(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                stack.push(v.to_radians().cos());
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, stack.push(v.to_radians().cos()) );
     }
 
     // atan
     pub fn atan(stack: &mut Vec<f32>) -> () {
-        if stack.len() >= 2 {
-            let v2 = stack.pop().unwrap();
-            let v1 = stack.pop().unwrap();
+	take_two!(stack, v1, v2, {
             let r = v1.atan2(v2).to_degrees();
             if r >= 0. {
                 stack.push(r);
             } else {
                 stack.push(r + 360.);
             }
-
-        } else {
-            println!("Error: stack underflow");
-        }
+	});
     }
 
     // rand
@@ -396,14 +232,7 @@ mod op {
     // exit
 
     pub fn eq(stack: &mut Vec<f32>) -> () {
-        match stack.pop() {
-            Some(v) => {
-                println!(" {}", v);
-            }
-            _ => {
-                println!("Error: stack underflow");
-            }
-        }
+	take_one!(stack, v, println!(" {}", v) );
     }
 
     // eeq
@@ -427,6 +256,70 @@ mod op {
         }
 
         #[test]
+        fn test_exch() {
+            let mut stack = vec![1., 2.];
+            exch(&mut stack);
+            assert_eq!(stack, [2., 1.]);
+        }
+
+        #[test]
+        fn test_pop() {
+	    let mut stack = vec![1., 2., 3.];
+	    pop(&mut stack);
+	    assert_eq!(stack, [1., 2.]);
+	}
+
+        #[test]
+        fn test_copy() {
+	    {
+		let mut stack = vec![1., 2., 3., 2.];
+		copy(&mut stack);
+		assert_eq!(stack, [1., 2., 3., 2., 3.]);
+	    }
+	    {
+		let mut stack = vec![1., 2., 3., 0.];
+		copy(&mut stack);
+		assert_eq!(stack, [1., 2., 3.]);
+	    }
+	}
+
+        #[test]
+        fn test_roll() {
+            let mut stack = vec![4., 3., 2., 1., 3., 1.];
+            roll(&mut stack);
+            assert_eq!(stack, [4., 1., 3., 2.]);
+            stack.push(3.);
+            stack.push(-1.);
+            roll(&mut stack);
+            assert_eq!(stack, [4., 3., 2., 1.]);
+            stack.push(4.);
+            stack.push(2.);
+            roll(&mut stack);
+            assert_eq!(stack, [2., 1., 4., 3.]);
+        }
+
+        #[test]
+        fn test_index() {
+            {
+                let mut stack = vec![1., 2., 3., 4., 0.,];
+                index(&mut stack);
+                assert_eq!(stack, [1., 2., 3., 4., 4.]);
+            }
+            {
+                let mut stack = vec![1., 2., 3., 4., 3.,];
+                index(&mut stack);
+                assert_eq!(stack, [1., 2., 3., 4., 1.]);
+            }
+	}
+
+        #[test]
+        fn test_clear() {
+            let mut stack = vec![1., 2., 3., 4.];
+            clear(&mut stack);
+            assert_eq!(stack, []);
+	}
+
+        #[test]
         fn test_count() {
             let mut stack = vec![1., 2.];
             count(&mut stack);
@@ -441,6 +334,20 @@ mod op {
             let mut stack = vec![1., 2.];
             add(&mut stack);
             assert_eq!(stack, [3.]);
+        }
+
+        #[test]
+        fn test_sub() {
+            let mut stack = vec![1., 2.];
+            sub(&mut stack);
+            assert_eq!(stack, [-1.]);
+        }
+
+        #[test]
+        fn test_mul() {
+            let mut stack = vec![3., 4.];
+            mul(&mut stack);
+            assert_eq!(stack, [12.]);
         }
 
         #[test]
@@ -477,18 +384,143 @@ mod op {
         }
 
         #[test]
-        fn test_roll() {
-            let mut stack = vec![4., 3., 2., 1., 3., 1.];
-            roll(&mut stack);
-            assert_eq!(stack, [4., 1., 3., 2.]);
-            stack.push(3.);
-            stack.push(-1.);
-            roll(&mut stack);
-            assert_eq!(stack, [4., 3., 2., 1.]);
-            stack.push(4.);
-            stack.push(2.);
-            roll(&mut stack);
-            assert_eq!(stack, [2., 1., 4., 3.]);
+        fn test_mod() {
+            {
+                let mut stack = vec![5., 3.];
+                mod_fn(&mut stack);
+                assert_eq!(stack, [2.]);
+            }
+            {
+                let mut stack = vec![5., 2.];
+                mod_fn(&mut stack);
+                assert_eq!(stack, [1.]);
+            }
+            {
+                let mut stack = vec![-5., 3.];
+                mod_fn(&mut stack);
+                assert_eq!(stack, [-2.]);
+            }
+	}
+
+        #[test]
+        fn test_abs() {
+            {
+                let mut stack = vec![-2.];
+                abs(&mut stack);
+                assert_eq!(stack, [2.]);
+            }
+            {
+                let mut stack = vec![3.];
+                abs(&mut stack);
+                assert_eq!(stack, [3.]);
+            }
+	}
+
+        #[test]
+        fn test_neg() {
+            {
+                let mut stack = vec![-2.];
+                neg(&mut stack);
+                assert_eq!(stack, [2.]);
+            }
+            {
+                let mut stack = vec![3.];
+                neg(&mut stack);
+                assert_eq!(stack, [-3.]);
+            }
+	}
+
+        #[test]
+        fn test_ceiling() {
+            {
+                let mut stack = vec![3.2];
+                ceiling(&mut stack);
+                assert_eq!(stack, [4.]);
+            }
+            {
+                let mut stack = vec![-4.8];
+                ceiling(&mut stack);
+                assert_eq!(stack, [-4.]);
+            }
+            {
+                let mut stack = vec![99.];
+                ceiling(&mut stack);
+                assert_eq!(stack, [99.]);
+            }
+	}
+
+        #[test]
+        fn test_floor() {
+            {
+                let mut stack = vec![3.2];
+                floor(&mut stack);
+                assert_eq!(stack, [3.]);
+            }
+            {
+                let mut stack = vec![-4.8];
+                floor(&mut stack);
+                assert_eq!(stack, [-5.]);
+            }
+            {
+                let mut stack = vec![99.];
+                floor(&mut stack);
+                assert_eq!(stack, [99.]);
+            }
+	}
+
+        #[test]
+        fn test_round() {
+            {
+                let mut stack = vec![3.2];
+                round(&mut stack);
+                assert_eq!(stack, [3.]);
+            }
+//            {
+//                let mut stack = vec![6.5];
+//                round(&mut stack);
+//                assert_eq!(stack, [7.]);
+//            }
+            {
+                let mut stack = vec![-4.8];
+                round(&mut stack);
+                assert_eq!(stack, [-5.]);
+            }
+//            {
+//                let mut stack = vec![-6.5];
+//                round(&mut stack);
+//                assert_eq!(stack, [-6.]);
+//            }
+            {
+                let mut stack = vec![99.];
+                round(&mut stack);
+                assert_eq!(stack, [99.]);
+            }
+	}
+
+        #[test]
+        fn test_truncate() {
+            {
+                let mut stack = vec![3.2];
+                truncate(&mut stack);
+                assert_eq!(stack, [3.]);
+            }
+            {
+                let mut stack = vec![-4.8];
+                truncate(&mut stack);
+                assert_eq!(stack, [-4.]);
+            }
+            {
+                let mut stack = vec![99.];
+                truncate(&mut stack);
+                assert_eq!(stack, [99.]);
+            }
+	}
+
+        #[test]
+        fn test_sqrt() {
+            let mut stack = vec![9.];
+            sqrt(&mut stack);
+            assert_eq!(stack, [3.]);
         }
 
         #[test]
@@ -504,6 +536,7 @@ mod op {
                 assert_eq!(stack, [-0.11111111]);
             }
 	}
+
 
         #[test]
         fn test_ln() {
@@ -532,6 +565,8 @@ mod op {
                 assert_eq!(stack, [2.]);
             }
 	}
+
+	// test_sin
 
         #[test]
         fn test_cos() {
@@ -572,6 +607,7 @@ mod op {
             }
         }
 
+	// test_rand
 //        #[test]
 //        fn test_for() {
 //            {
@@ -579,7 +615,10 @@ mod op {
 //                for(&mut stack);
 //                assert_eq!(stack, [10.]);
 //            }
-//	}
+	//	}
+
+	// test_eq
+	// test_stack
     }
 }
 
@@ -588,42 +627,42 @@ fn main() {
     let mut stack = Vec::new();
     let mut function_table: HashMap<String, fn(&mut Vec<f32>)> = HashMap::new();
 
+    use crate::op::*;
     // 3.6.1
-    function_table.insert("dup".to_string(), op::dup);
-    function_table.insert("exch".to_string(), op::exch);
-    function_table.insert("pop".to_string(), op::pop);
-    function_table.insert("copy".to_string(), op::copy);
-    function_table.insert("roll".to_string(), op::roll);
-    function_table.insert("index".to_string(), op::index);
-//    function_table.insert("mark".to_string(), op::mark);
-    function_table.insert("clear".to_string(), op::clear);
-    function_table.insert("count".to_string(), op::count);
+    add_op!(function_table, dup);
+    add_op!(function_table, exch);
+    add_op!(function_table, pop);
+    add_op!(function_table, copy);
+    add_op!(function_table, roll);
+    add_op!(function_table, index);
+    add_op!(function_table, clear);
+    add_op!(function_table, count);
 
-    function_table.insert("add".to_string(), op::add);
-    function_table.insert("sub".to_string(), op::sub);
-    function_table.insert("mul".to_string(), op::mul);
-    function_table.insert("div".to_string(), op::div);
-    function_table.insert("idiv".to_string(), op::idiv);
+    add_op!(function_table, add);
+    add_op!(function_table, sub);
+    add_op!(function_table, mul);
+    add_op!(function_table, div);
+    add_op!(function_table, idiv);
+
+//    add_op!(function_table, mod);
     function_table.insert("mod".to_string(), op::mod_fn);
 
-    function_table.insert("abs".to_string(), op::abs);
-    function_table.insert("neg".to_string(), op::neg);
-    function_table.insert("ceiling".to_string(), op::ceiling);
-    function_table.insert("floor".to_string(), op::floor);
-    function_table.insert("round".to_string(), op::round);
-    function_table.insert("truncate".to_string(), op::truncate);
+    add_op!(function_table, abs);
+    add_op!(function_table, neg);
+    add_op!(function_table, ceiling);
+    add_op!(function_table, floor);
+    add_op!(function_table, round);
+    add_op!(function_table, truncate);
 
     // 3.6.2
-    function_table.insert("sqrt".to_string(), op::sqrt);
-    function_table.insert("exp".to_string(), op::exp);
-    function_table.insert("ln".to_string(), op::ln);
-    function_table.insert("log".to_string(), op::log);
-    function_table.insert("sin".to_string(), op::sin);
-    function_table.insert("cos".to_string(), op::cos);
-    function_table.insert("atan".to_string(), op::atan);
-    function_table.insert("rand".to_string(), op::rand);
-//    function_table.insert("srand".to_string(), op::srand);
-//    function_table.insert("rrand".to_string(), op::rrand);
+    add_op!(function_table, sqrt);
+    add_op!(function_table, exp);
+    add_op!(function_table, ln);
+    add_op!(function_table, log);
+    add_op!(function_table, sin);
+    add_op!(function_table, cos);
+    add_op!(function_table, atan);
+    add_op!(function_table, rand);
 
     // 3.6.5
     // if
@@ -637,9 +676,7 @@ fn main() {
 
     // 3.8.5
     function_table.insert("=".to_string(), op::eq);
-//    function_table.insert("==".to_string(), op::eeq);
     function_table.insert("stack".to_string(), op::stack_fn);
-//    function_table.insert("pstack".to_string(), op::pstack);
 
     loop {
         let readline = rl.readline(">> ");
