@@ -5,62 +5,40 @@ use std::collections::HashMap;
 
 mod op {
 
-    // @todo value should probably move out of op
-    #[derive(PartialEq, Debug, Copy, Clone)]
-    pub enum Tag { Number, Symbol, String }
-
-    pub union U {
-	pub f: f32,
-	pub s: &'static str
+    #[derive(Debug,PartialEq)]
+    pub enum Value {
+	Num(f32),
+	Str(String),
+	Sym(String)
     }
-
-    pub struct Value { pub tag: Tag, pub val: U }
 
     impl Clone for Value {
-	fn clone(&self) -> Self {
-	    if self.tag == Tag::Number {
-		unsafe {
-		    Value { tag: self.tag, val: U { f: self.val.f }}
-		}
-	    } else {
-		unsafe {
-		    Value { tag: self.tag, val: U { s: self.val.s }}
-		}
-	    }
-	}
-    }
-
-    impl PartialEq for Value {
-	fn eq(&self, other: &Self) -> bool {
-	    if self.tag == Tag::Number && other.tag == Tag::Number {
-		unsafe {
-		    self.val.f == other.val.f
-		}
-	    } else if self.tag == Tag::String && other.tag == Tag::String {
-		unsafe {
-		    self.val.s == other.val.s
-		}
-	    } else {
-		false
-	    }
-	}
-    }
-
-    impl std::fmt::Debug for Value {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-	    unsafe {
-		f.debug_struct("Value")
-		    .field("tag", &self.tag)
-		    .field("val", &self.val.f)
-		    .finish()
-	    }
-	}
+    	fn clone(&self) -> Value {
+    	    match self {
+    		Value::Num(n) => {
+    		    Value::Num(*n)
+    		}
+    		Value::Str(s) => {
+    		    Value::Str(s.to_string())
+    		}
+    		Value::Sym(s) => {
+    		    Value::Sym(s.to_string())
+    		}
+    	    }
+    	}
     }
 
     #[macro_export]
     macro_rules! number {
 	($ex:expr) => {
-	    Value { tag: Tag::Number, val: U { f: $ex } }
+	    Value::Num($ex)
+	}
+    }
+
+    #[macro_export]
+    macro_rules! string {
+	($ex:expr) => {
+	    Value::Str($ex.to_string())
 	}
     }
 
@@ -74,15 +52,16 @@ mod op {
 
     macro_rules! take_one_number {
 	($s:ident, $v:ident, $ex:expr) => {
-	    unsafe {
-		match $s.pop() {
-		    Some(Value { tag: Tag::Number, val: U { f: $v } }) => {
-			$ex;
-		    }
-		    // @todo add different message for symbol & string
-		    _ => {
-			println!("Error: stack underflow");
-		    }
+	    match $s.pop() {
+		Some(Value::Num($v)) => {
+		    $ex;
+		}
+		Some(Value::Str($v)) => {
+		    ignore($v);
+		    println!("Error: expected number, found string");
+		}
+		_ => {
+		    println!("Error: stack underflow");
 		}
 	    }
 	}
@@ -110,24 +89,33 @@ mod op {
 
     macro_rules! take_two_numbers {
 	($s:ident, $v1:ident, $v2:ident, $ex:expr) => {
-	    unsafe {
-		match $s.pop() {
-		    Some(Value { tag: Tag::Number, val: U { f: $v2 } }) => {
-			match $s.pop() {
-			    Some(Value { tag: Tag::Number, val: U { f: $v1 } }) => {
-				$ex;
-			    }
-			    _ => {
-				println!("Error: stack underflow");
-			    }
+	    match $s.pop() {
+		Some(Value::Num($v2)) => {
+		    match $s.pop() {
+			Some(Value::Num($v1)) => {
+			    $ex;
+			}
+			Some(Value::Str($v1)) => {
+			    ignore($v1);
+			    println!("Error: expected number, found string");
+			}
+			_ => {
+			    println!("Error: stack underflow");
 			}
 		    }
-		    _ => {
-			println!("Error: stack underflow");
-		    }
+		}
+		Some(Value::Str($v2)) => {
+		    ignore($v2);
+		    println!("Error: expected number, found string ");
+		}
+		_ => {
+		    println!("Error: stack underflow");
 		}
 	    }
 	}
+    }
+
+    fn ignore(_: String) {
     }
 
     pub fn dup(stack: &mut Vec<Value>) -> () {
@@ -144,8 +132,8 @@ mod op {
 
     pub fn exch(stack: &mut Vec<Value>) -> () {
 	take_two!(stack, v1, v2, {
-            stack.push(v2.clone());
-            stack.push(v1.clone());
+            stack.push(v2);
+            stack.push(v1);
         });
     }
 
@@ -321,17 +309,15 @@ mod op {
     // exit
 
     pub fn eq(stack: &mut Vec<Value>) -> () {
-	unsafe {
-            match stack.pop() {
-		Some(Value { tag: Tag::Number, val: U { f: v } }) => {
-		    println!(" {}", v)
-		}
-		Some(Value { tag: Tag::String, val: U { s: v } }) => {
-		    println!(" {}", v)
-		}
-		_ => {
-		    println!("Error: stack underflow");
-		}
+        match stack.pop() {
+	    Some(Value::Num(v)) => {
+		println!(" {}", v)
+	    }
+	    Some(Value::Str(s)) => {
+		println!(" {}", s)
+	    }
+	    _ => {
+		println!("Error: stack underflow");
 	    }
 	}
     }
@@ -339,17 +325,15 @@ mod op {
     // eeq
     pub fn stack_fn(stack: &mut Vec<Value>) -> () {
         for i in stack.iter().rev() {
-	    unsafe {
-		match i {
-		    Value { tag: Tag::Number, val: U { f: v } } => {
-			println!(" {}", v)
-		    }
-		    Value { tag: Tag::String, val: U { s: v } } => {
-			println!(" {}", v)
-		    }
-		    _ => {
-			println!("Error: stack underflow");
-		    }
+	    match i {
+		Value::Num(v) => {
+		    println!(" {}", v)
+		}
+		Value::Str(s) => {
+		    println!(" {}", s)
+		}
+		_ => {
+		    println!("Error: stack underflow");
 		}
 	    }
 	}
@@ -363,30 +347,51 @@ mod op {
 
         #[test]
         fn test_dup() {
-            let mut stack = vec![number!(1.), number!(2.)];
-            dup(&mut stack);
-            assert_eq!(stack, [number!(1.), number!(2.), number!(2.)]);
+	    {
+		let mut stack = vec![number!(1.), number!(2.)];
+		dup(&mut stack);
+		assert_eq!(stack, [number!(1.), number!(2.), number!(2.)]);
+	    }
+	    {
+		let mut stack = vec![number!(1.), string!("fred")];
+		dup(&mut stack);
+		assert_eq!(stack, [number!(1.), string!("fred"), string!("fred")]);
+	    }
         }
 
         #[test]
         fn test_exch() {
-            let mut stack = vec![number!(1.), number!(2.)];
-            exch(&mut stack);
-            assert_eq!(stack, [number!(2.), number!(1.)]);
+	    {
+		let mut stack = vec![number!(1.), number!(2.)];
+		exch(&mut stack);
+		assert_eq!(stack, [number!(2.), number!(1.)]);
+	    }
+	    {
+		let mut stack = vec![string!("fred"), string!("ginger")];
+		exch(&mut stack);
+		assert_eq!(stack, [string!("ginger"), string!("fred")]);
+	    }
         }
 
         #[test]
         fn test_pop() {
-	    let mut stack = vec![number!(1.), number!(2.), number!(3.)];
-	    pop(&mut stack);
-	    assert_eq!(stack, [number!(1.), number!(2.)]);
+	    {
+		let mut stack = vec![number!(1.), number!(2.), number!(3.)];
+		pop(&mut stack);
+		assert_eq!(stack, [number!(1.), number!(2.)]);
+	    }
+	    {
+		let mut stack = vec![number!(1.), string!("ducks")];
+		pop(&mut stack);
+		assert_eq!(stack, [number!(1.)]);
+	    }
 	}
 
         #[test]
         fn test_copy() {
 	    {
-		let mut stack = vec![number!(1.), number!(2.),
-				     number!(3.), number!(2.)];
+		let mut stack = vec![number!(1.), number!(2.), number!(3.),
+				     number!(2.)];
 		copy(&mut stack);
 		assert_eq!(stack, [number!(1.), number!(2.), number!(3.),
 				   number!(2.), number!(3.)]);
@@ -396,6 +401,13 @@ mod op {
 				     number!(0.)];
 		copy(&mut stack);
 		assert_eq!(stack, [number!(1.), number!(2.), number!(3.),]);
+	    }
+	    {
+		let mut stack = vec![number!(1.), string!("monkey"), number!(3.),
+				     number!(2.)];
+		copy(&mut stack);
+		assert_eq!(stack, [number!(1.), string!("monkey"), number!(3.),
+				   string!("monkey"), number!(3.)]);
 	    }
 	}
 
@@ -748,11 +760,6 @@ fn main() {
     let mut stack = Vec::new();
     let mut function_table: HashMap<String, fn(&mut Vec<Value>)> = HashMap::new();
 
-//    let a = NumOrStr::Num(123);
-//    let b = NumOrStr::Str("fudge".to_string());
-//    print_it(&a);
-//    print_it(&b);
-
     use crate::op::*;
     // 3.6.1
     add_op!(function_table, dup);
@@ -812,7 +819,7 @@ fn main() {
                 for w in words {
                     match w.parse::<f32>() {
                         Ok(val) => {
-                            stack.push(number!(val));
+			    stack.push(Value::Num(val));
                         }
                         _ => {
                             match function_table.get(w) {
@@ -823,11 +830,7 @@ fn main() {
 				    // @todo this doesn't handle strings with embedded spaces
 				    if w.chars().next().unwrap() == '('
 					&& w.chars().last().unwrap() == ')' {
-					    let newstr = w.clone();
-//					    stack.push(op::Value { tag: op::Tag::String,
-//								   val: U { s: newstr }
-//					    });
-					println!("string: {}", w);
+					    stack.push(Value::Str(w.to_string()));
 				    } else {
 					println!("unknown: {}", w);
 				    }
