@@ -67,6 +67,23 @@ mod op {
 	}
     }
 
+    macro_rules! take_one_string {
+	($s:ident, $v:ident, $ex:expr) => {
+	    match $s.pop() {
+		Some(Value::Str($v)) => {
+		    $ex;
+		}
+		Some(Value::Num($v)) => {
+		    ignore($v);
+		    println!("Error: expected string, found number");
+		}
+		_ => {
+		    println!("Error: stack underflow");
+		}
+	    }
+	}
+    }
+
     macro_rules! take_two {
 	($s:ident, $v1:ident, $v2:ident, $ex:expr) => {
 	    match $s.pop() {
@@ -115,7 +132,35 @@ mod op {
 	}
     }
 
-    fn ignore(_: String) {
+    macro_rules! take_two_strings {
+	($s:ident, $s1:ident, $s2:ident, $ex:expr) => {
+	    match $s.pop() {
+		Some(Value::Str($s2)) => {
+		    match $s.pop() {
+			Some(Value::Str($s1)) => {
+			    $ex;
+			}
+			Some(Value::Num($s1)) => {
+			    ignore($s1);
+			    println!("Error: expected number, found number");
+			}
+			_ => {
+			    println!("Error: stack underflow");
+			}
+		    }
+		}
+		Some(Value::Num($s2)) => {
+		    ignore($s2);
+		    println!("Error: expected number, found number ");
+		}
+		_ => {
+		    println!("Error: stack underflow");
+		}
+	    }
+	}
+    }
+
+    fn ignore<T>(_: T) {
     }
 
     pub fn dup(stack: &mut Vec<Value>) -> () {
@@ -209,78 +254,62 @@ mod op {
 	take_two_numbers!(stack, v1, v2, stack.push(number!(v1 / v2)))
     }
 
-    // idiv
     pub fn idiv(stack: &mut Vec<Value>) -> () {
 	take_two_numbers!(stack, v1, v2, stack.push(number!((v1 as i32 / v2 as i32) as f32)))
     }
 
-    // mod
     pub fn mod_fn(stack: &mut Vec<Value>) -> () {
 	take_two_numbers!(stack, v1, v2, stack.push(number!((v1 as i32 % v2 as i32) as f32)))
     }
 
-
-    // abs
     pub fn abs(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.abs())))
     }
 
-    // neg
     pub fn neg(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(-v)))
     }
 
-    // ceiling
     pub fn ceiling(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.ceil())))
     }
 
-    // floor
     pub fn floor(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.floor())))
     }
 
-    // round
     pub fn round(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.round())))
     }
 
-    // truncate
     pub fn truncate(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.trunc())))
     }
 
-    // sqrt
     pub fn sqrt(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.sqrt())))
     }
 
-    // exp
     pub fn exp(stack: &mut Vec<Value>) -> () {
 	take_two_numbers!(stack, v1, v2, stack.push(number!(v1.powf(v2))))
     }
 
-    // ln
     pub fn ln(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.ln())))
     }
 
-    // log
     pub fn log(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.log10())))
     }
 
-    // sin
     pub fn sin(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.to_radians().sin())))
     }
 
-    // cos
     pub fn cos(stack: &mut Vec<Value>) -> () {
 	take_one_number!(stack, v, stack.push(number!(v.to_radians().cos())))
     }
 
-    // atan
     pub fn atan(stack: &mut Vec<Value>) -> () {
 	take_two_numbers!(stack, v1, v2, {
             let r = v1.atan2(v2).to_degrees();
@@ -292,21 +321,35 @@ mod op {
 	});
     }
 
-    // rand
     pub fn rand(stack: &mut Vec<Value>) -> () {
         stack.push(number!(rand::random::<u32>() as f32))
     }
 
-    // srand
-    // rrand
-    // if
-    // ifelse
-    // exec
-    // for
-    // repeat
-    // loop
-    // forall
-    // exit
+    pub fn search(stack: &mut Vec<Value>) -> () {
+	take_two_strings!(stack, s1, s2, {
+	    match s1.find(&s2) {
+		Some(c) => {
+		    let (first, rest) = s1.split_at(c);
+		    let (mid, last) = rest.split_at(s1.len() - c -1);
+		    stack.push(string!(last));
+		    stack.push(string!(mid));
+		    stack.push(string!(first));
+		    stack.push(number!(1.));
+
+		}
+		_ => {
+		    stack.push(string!(s1));
+		    stack.push(number!(0.));
+		}
+	    }
+	});
+    }
+
+    pub fn length(stack: &mut Vec<Value>) -> () {
+	take_one_string!(stack, s, {
+	    stack.push(number!(s.len() as f32));
+	});
+    }
 
     pub fn eq(stack: &mut Vec<Value>) -> () {
         match stack.pop() {
@@ -314,7 +357,7 @@ mod op {
 		println!(" {}", v)
 	    }
 	    Some(Value::Str(s)) => {
-		println!(" {}", s)
+		println!(" ({})", s)
 	    }
 	    _ => {
 		println!("Error: stack underflow");
@@ -322,7 +365,6 @@ mod op {
 	}
     }
 
-    // eeq
     pub fn stack_fn(stack: &mut Vec<Value>) -> () {
         for i in stack.iter().rev() {
 	    match i {
@@ -330,7 +372,7 @@ mod op {
 		    println!(" {}", v)
 		}
 		Value::Str(s) => {
-		    println!(" {}", s)
+		    println!(" ({})", s)
 		}
 		_ => {
 		    println!("Error: stack underflow");
@@ -338,8 +380,6 @@ mod op {
 	    }
 	}
     }
-
-    // pstack
 
     #[cfg(test)]
     mod tests {
@@ -607,6 +647,7 @@ mod op {
                 round(&mut stack);
                 assert_eq!(stack, [number!(3.)]);
             }
+// @todo Have an issue with rounding dir for 1/2
 //            {
 //                let mut stack = vec![number!(6.5)];
 //                round(&mut stack);
@@ -740,6 +781,26 @@ mod op {
         }
 
 	// test_rand
+
+        #[test]
+        fn test_search() {
+            {
+                let mut stack = vec![string!("abbc"), string!("bb")];
+                search(&mut stack);
+		// retval should really be true
+                assert_eq!(stack, vec![string!("c"), string!("bb"), string!("a"), number!(1.)]);
+	    }
+	}
+
+        #[test]
+        fn test_length() {
+            {
+                let mut stack = vec![string!("abbc")];
+                length(&mut stack);
+                assert_eq!(stack, vec![number!(4.)]);
+	    }
+	}
+
 //        #[test]
 //        fn test_for() {
 //            {
@@ -777,9 +838,6 @@ fn main() {
     add_op!(function_table, div);
     add_op!(function_table, idiv);
 
-//    add_op!(function_table, mod);
-    function_table.insert("mod".to_string(), op::mod_fn);
-
     add_op!(function_table, abs);
     add_op!(function_table, neg);
     add_op!(function_table, ceiling);
@@ -787,7 +845,6 @@ fn main() {
     add_op!(function_table, round);
     add_op!(function_table, truncate);
 
-    // 3.6.2
     add_op!(function_table, sqrt);
     add_op!(function_table, exp);
     add_op!(function_table, ln);
@@ -797,17 +854,11 @@ fn main() {
     add_op!(function_table, atan);
     add_op!(function_table, rand);
 
-    // 3.6.5
-    // if
-    // ifelse
-    // exec
-    // for
-    // repeat
-    // loop
-    // forall
-    // exit
+    add_op!(function_table, search);
+    add_op!(function_table, length);
 
-    // 3.8.5
+    // Can't use macro for these because their names aren't valid Rust
+    function_table.insert("mod".to_string(), op::mod_fn);
     function_table.insert("=".to_string(), op::eq);
     function_table.insert("stack".to_string(), op::stack_fn);
 
@@ -817,20 +868,28 @@ fn main() {
             Ok(line) => {
                 let words = line.as_str().split(" ");
                 for w in words {
+		    // If we can read it as a f32, then it's a number
                     match w.parse::<f32>() {
                         Ok(val) => {
 			    stack.push(Value::Num(val));
                         }
                         _ => {
+			    // Otherwise, look in the OP table
                             match function_table.get(w) {
                                 Some(fcn) => {
                                     fcn(&mut stack)
                                 }
                                 _ => {
-				    // @todo this doesn't handle strings with embedded spaces
+				    // Otherwise, if 1st & last chars are parens, it's a string.
+				    //
+				    // @todo This doesn't handle strings with embedded spaces
+				    // because the split will already have chopped them up.
 				    if w.chars().next().unwrap() == '('
 					&& w.chars().last().unwrap() == ')' {
-					    stack.push(Value::Str(w.to_string()));
+					    stack.push(Value::Str(w
+								  .trim_start_matches('(')
+								  .trim_end_matches(')')
+								  .to_string()));
 				    } else {
 					println!("unknown: {}", w);
 				    }
