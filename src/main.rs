@@ -866,6 +866,10 @@ fn main() {
     function_table.insert("=".to_string(), op::eq);
     function_table.insert("stack".to_string(), op::stack_fn);
 
+    // Storage for holding string while we look for ')'.
+    // @todo Has issues when embedded parens and spaces are neighbors.
+    let mut pending_string: Option<String> = None;
+
     // The actual REPL
     loop {
         // Read the next line
@@ -876,36 +880,67 @@ fn main() {
                 let words = line.as_str().split(" ");
                 // For each word ...
                 for w in words {
-                    // If we can read it as a f32, then it's a number.
-                    // Push it onto the stack.
-                    match w.parse::<f32>() {
-                        Ok(val) => {
-                            stack.push(Value::Num(val));
-                        }
-                        _ => {
-                            // Otherwise, look in the function table
-                            match function_table.get(w) {
-                                // If it's a valid function, execute it.
-                                Some(fcn) => {
-                                    fcn(&mut stack)
-                                }
-                                _ => {
-                                    // Otherwise, if 1st & last chars are parens, it's a string.
-                                    //
-                                    // @todo This doesn't handle strings with embedded spaces
-                                    // because the split will already have chopped them up.
-                                    if w.chars().next().unwrap() == '('
-                                        && w.chars().last().unwrap() == ')' {
-                                            stack.push(Value::Str(w
-                                                                  .trim_start_matches('(')
-                                                                  .trim_end_matches(')')
-                                                                  .to_string()));
-                                        } else {
-                                            println!("unknown: {}", w);
-                                        }
-                                }
+		    // If we're in the middle of a string, accumulate until the ')'
+		    if pending_string.is_some() {
+			match w.chars().last() {
+			    Some(')') => {
+				let mut s = pending_string.take().unwrap();
+				s.push(' ');
+				s.push_str(w.trim_end_matches(')'));
+				stack.push(Value::Str(s));
+			    }
+			    _ => {
+				let mut s = pending_string.take().unwrap();
+				s.push(' ');
+				s.push_str(w);
+				pending_string = Some(s);
+			    }
+			}
+		    } else {
+
+			// If we can read it as a f32, then it's a number.
+			// Push it onto the stack.
+			match w.parse::<f32>() {
+                            Ok(val) => {
+				stack.push(Value::Num(val));
                             }
-                        }
+                            _ => {
+				// Otherwise, look in the function table
+				match function_table.get(w) {
+                                    // If it's a valid function, execute it.
+                                    Some(fcn) => {
+					fcn(&mut stack)
+                                    }
+                                    _ => {
+					match w.chars().next() {
+					    // A '(' means it's the start of a string.
+					    Some('(') => {
+						match w.chars().last() {
+						    // A ')' means we have the whole string and
+						    // can push it on the stack.
+						    Some(')') => {
+							stack.push(Value::Str(w
+									      .trim_start_matches('(')
+									      .trim_end_matches(')')
+									      .to_string()));
+						    }
+						    // Otherwise, stick it in pending_string
+						    // while we look for more.
+						    _ => {
+							pending_string = Some(w
+									      .trim_start_matches('(')
+									      .to_string());
+						    }
+						}
+					    }
+					    _ => {
+						println!("unknown: {}", w);
+					    }
+					}
+                                    }
+				}
+                            }
+			}
                     }
                 }
             },
